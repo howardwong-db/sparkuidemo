@@ -1,0 +1,141 @@
+buildscript {
+    repositories {
+        jcenter()
+        //maven {
+        //    url "${repositoryURL}/repo"
+        //    name = "maven-main-cache"
+    	//}
+    }
+    dependencies {
+        classpath "com.github.jengelman.gradle.plugins:shadow:5.2.0"
+        classpath "org.github.ngbinh.scalastyle:gradle-scalastyle-plugin_2.11:0.8.2"
+    }
+}
+
+repositories {
+    mavenCentral()
+    //maven {
+    //    url "${repositoryURL}/repo"
+    //    name = "maven-main-cache"
+    //}
+    //add buildscript.repositories.getByName("maven-main-cache")
+}
+
+apply plugin: 'java'
+apply plugin: 'scala'
+apply plugin: 'eclipse'
+apply plugin: 'maven'
+apply plugin: 'maven-publish'
+apply plugin: 'com.github.johnrengelman.shadow'
+
+group 'org.apache.spark.examples'
+//let gradle.properties define this
+//version = '0.0.1'
+if (!isRelease.toBoolean()) {
+    version += '-SNAPSHOT';
+}
+archivesBaseName = "sparkpi"
+description = "Spark example"
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+configurations {
+    provided
+}
+
+def buildver="SparkPi"+ "_" + version + "_BuildTime_" +new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+
+sourceSets {
+    main.compileClasspath += configurations.provided
+    test.compileClasspath += configurations.provided
+    test.runtimeClasspath += configurations.provided
+}
+
+eclipse {
+    classpath {
+        plusConfigurations += [ configurations.provided ]
+    }
+}
+
+dependencies {
+    provided "org.apache.spark:spark-core_2.11:2.4.5"
+    //provided "org.apache.spark:spark-streaming_2.11:2.4.5"
+    provided "org.apache.spark:spark-sql_2.11:2.4.5" 
+
+    provided(group: 'org.apache.hadoop', name: 'hadoop-azure', version: '2.9.2') {
+        exclude group: 'javax.servlet'
+    }
+
+    compile "org.scala-lang:scala-library:2.11.12"
+    compile group: 'com.databricks', name: 'spark-xml_2.11', version: '0.5.0'
+
+
+    testCompile "org.scalatest:scalatest_2.11:3.0.1"
+
+    testCompile "com.github.tomakehurst:wiremock-standalone:2.23.2"
+}
+
+jar {
+    manifest {
+        attributes 'Implementation-Title': "$buildver"
+    }
+}
+
+task sourcesJar(type: Jar, dependsOn:classes) {
+    description = 'Packages up the source for this module'
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn:javadoc) {
+    description = 'Packages up the javadoc for this module for use in IDEs'
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+shadowJar {
+    mergeServiceFiles()
+    baseName = "sparkpi"
+    //relocate 'okio','repackaged.okio'
+    //relocate 'com.squareup.okio','repackaged.com.squareup.okio'
+    dependencies {
+        exclude(dependency('org.apache.spark:spark-core_2.11'))
+    }
+}
+
+publishing {
+    publications {
+        mavenJar(MavenPublication) {
+            artifactId archivesBaseName
+            from components.java
+            artifact sourcesJar {
+                classifier 'sources'
+            }
+            artifact javadocJar {
+                classifier 'javadoc'
+            }
+        }
+	shadow(MavenPublication) { publication ->
+      		project.shadow.component(publication)
+        }
+    }
+    repositories {
+        maven {
+            credentials {
+                username artifactory_user
+                password artifactory_password
+            }
+            url isRelease.toBoolean() ? "${repositoryURL}/libs-releases-local" : "${repositoryURL}/libs-snapshots-local"
+        }
+    }
+}
+
+task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {
+  main = 'org.scalatest.tools.Runner'
+  args = ['-R', 'build/classes/scala/test', '-o']
+  classpath = sourceSets.test.runtimeClasspath
+}
+
+test.dependsOn scalaTest // so that running "test" would run this first, then the JUnit tests
+
