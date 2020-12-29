@@ -5,6 +5,8 @@ scalaVersion := "2.11.12"
 
 val sparkVersion = "2.4.5"
 
+scalacOptions += "-target:jvm-1.8"
+
 // Note the dependencies are provided
 //libraryDependencies += "org.apache.spark" %% "spark-core" % sparkVersion % "provided"
 //libraryDependencies += "org.apache.spark" %% "spark-sql" % sparkVersion % "provided"
